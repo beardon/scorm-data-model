@@ -16,7 +16,7 @@ describe('SCORM Data', () => {
                 expect(normalizePath('cmi.interactions')).to.equal('cmi._sub.interactions._value');
             });
 
-            it('should convert array indices to array notation', () => { 
+            it('should convert array indices to array notation', () => {
                 expect(normalizePath('cmi.interactions.0.id')).to.equal('cmi._sub.interactions._arr[0]._sub.id._value');
             });
 
@@ -25,7 +25,7 @@ describe('SCORM Data', () => {
             });
 
             it('should correctly handle _count', () => {
-                expect(normalizePath('cmi.interactions._count')).to.equal('cmi._sub.interactions._count._value');
+                expect(normalizePath('cmi.interactions._count')).to.equal('cmi._sub.interactions._arr.length');
             });
 
             it('should correctly handle _children', () => {
@@ -83,6 +83,18 @@ describe('SCORM Data', () => {
         describe('Array', () => {
             it('should initially have a _count of 0', () => {
                 expect(m.GetValue('cmi.interactions._count')).to.equal('0');
+            });
+
+            it('should initially have a _count of 1', () => {
+                m.SetValue('cmi.interactions.0.id', '1');
+                expect(m.GetValue('cmi.interactions._count')).to.equal('1');
+            });
+        });
+
+        describe('Serialization', () => {
+            // console.log(m.Serialize(), Model.Deserialize(m.Serialize()).Serialize());
+            it('should work', () => {
+                expect(m.Serialize()).to.deep.equal(Model.Deserialize(m.Serialize()).Serialize());
             });
         });
     });

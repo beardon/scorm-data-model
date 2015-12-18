@@ -11,11 +11,24 @@ class ModelComponent {
         this._arr = arr;
     }
 
+    _Serialize(key = '') {
+        if (!this._arr.length && !Object.keys(this._sub).length) {
+            if (this._value === '') return [];
+
+            return [{ element: key, value: this._value }];
+        }
+
+        const arr = _.map(this._arr, (value, idx) => value._Serialize(`${key}.${idx}`));
+        const sub = _.map(this._sub, (value, obj) => value._Serialize(`${key}.${obj}`));
+
+        return arr.concat(sub);
+    }
+
     toString(key = '') {
         if (!this._arr.length && !Object.keys(this._sub).length) return `${key} = "${this._value}"`;
 
-        const arr = this._arr.map((ar, i) => ar.toString(`${key}.${i}`));
-        const sub = Object.keys(this._sub).map((obj) => this._sub[obj].toString(`${key}.${obj}`));
+        const arr = _.map(this._arr, (value, idx) => value.toString(`${key}.${idx}`));
+        const sub = _.map(this._sub, (value, obj) => value.toString(`${key}.${obj}`));
 
         return arr
             .concat(sub)
@@ -85,8 +98,23 @@ export default class Model {
 
     // slurp the value out of the underlying data structure
     _GetValue(path) {
-        return _.get(this.data, path);
+        return String(_.get(this.data, path));
     }
+
+    _ExistPath(path) {
+        path.split('.').slice(1).slice(0, -1).reduce((currPath, part) => {
+            const nextPath = `${currPath}.${part}`;
+
+            const nextVal = _.get(this.data, nextPath);
+
+            if (!nextVal && part !== '_sub') {
+                _.set(this.data, nextPath, new ModelComponent());
+            }
+
+            return nextPath;
+        }, path.split('.')[0]);
+    }
+
 
     SetValue(element, value) {
         const genericPath = genericizePath(element);
@@ -105,17 +133,7 @@ export default class Model {
 
         const path = normalizePath(element);
 
-        path.split('.').slice(1).slice(0, -1).reduce((currPath, part) => {
-            const nextPath = `${currPath}.${part}`;
-
-            const nextVal = _.get(this.data, nextPath);
-
-            if (!nextVal && part !== '_sub') {
-                _.set(this.data, nextPath, new ModelComponent());
-            }
-
-            return nextPath;
-        }, path.split('.')[0]);
+        this._ExistPath(path);
 
         this._SetValue(path, value);
     }
@@ -125,14 +143,24 @@ export default class Model {
         _.set(this.data, path, value);
     }
 
-    // TODO: implement
     Serialize() {
-
+        return _.flattenDeep(_.map(this.data, (value, key) => value._Serialize(key)));
     }
 
-    // TODO: implement
-    static Deserialize(serialized) {
-        return new Model();
+    static Deserialize(serializedData) {
+        const model = new Model();
+
+        if (serializedData) {
+            _.forEach(serializedData, ({ element, value }) => {
+                const path = normalizePath(element);
+
+                model._ExistPath(path);
+
+                model._SetValue(path, value);
+            });
+        }
+
+        return model;
     }
 
     // TODO: include children

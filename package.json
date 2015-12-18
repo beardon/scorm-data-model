@@ -7,9 +7,8 @@
   "scripts": {
     "lint": "eslint -c .eslintrc.yml src",
     "build": "rollup -c rollup.config.js",
-    "pretest": "rollup -c rollup.test.config.js",
-    "test": "npm run pretest && mocha build/test.js",
-    "prepublish": "npm run build && npm test"
+    "test": "rollup -c rollup.test.config.js && mocha build/test.js",
+    "prepublish": "npm run lint && npm run build && npm test"
   },
   "repository": {
     "type": "git",
@@ -34,7 +33,6 @@
     "chai": "^3.4.1",
     "eslint": "^1.10.3",
     "eslint-config-beardon": "latest",
-    "expect": "^1.13.0",
     "mocha": "^2.3.4",
     "rollup": "^0.21.2",
     "rollup-plugin-babel": "^2.2.0",
