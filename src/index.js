@@ -15,7 +15,7 @@ class ModelComponent {
         if (!this._arr.length && !Object.keys(this._sub).length) {
             if (this._value === '') return [];
 
-            return [{ element: key, value: this._value }];
+            return { [key]: this._value };
         }
 
         const arr = _.map(this._arr, (value, idx) => value._Serialize(`${key}.${idx}`));
@@ -144,19 +144,21 @@ export default class Model {
     }
 
     Serialize() {
-        return _.flattenDeep(_.map(this.data, (value, key) => value._Serialize(key)));
+        return JSON.stringify(_.flattenDeep(_.map(this.data, (value, key) => value._Serialize(key))));
     }
 
     static Deserialize(serializedData) {
         const model = new Model();
 
         if (serializedData) {
-            _.forEach(serializedData, ({ element, value }) => {
-                const path = normalizePath(element);
+            const serialized = JSON.parse(serializedData);
+
+            _.forEach(serialized, (value) => {
+                const path = normalizePath(Object.keys(value)[0]);
 
                 model._ExistPath(path);
 
-                model._SetValue(path, value);
+                model._SetValue(path, value[Object.keys(value)[0]]);
             });
         }
 

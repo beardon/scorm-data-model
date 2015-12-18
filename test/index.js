@@ -92,9 +92,8 @@ describe('SCORM Data', () => {
         });
 
         describe('Serialization', () => {
-            // console.log(m.Serialize(), Model.Deserialize(m.Serialize()).Serialize());
             it('should work', () => {
-                expect(m.Serialize()).to.deep.equal(Model.Deserialize(m.Serialize()).Serialize());
+                expect(m.Serialize()).to.equal(Model.Deserialize(m.Serialize()).Serialize());
             });
         });
     });
