@@ -83,17 +83,39 @@ babelHelpers.slicedToArray = (function () {
 })();
 
 babelHelpers;
-// converts a cmi path to a path supported by the underlying data structure
-// eg: cmi.interactions.0 -> cmi.interactions._arr[0] -> cmi._sub.interactions._arr[0]._value
-function normalizePath(path) {
-    return path.toLowerCase()
-    // replace ".n." with "._arr[n]"
-    .replace(/\.(\d)\./g, '._arr[$1].').split('.')
-    // if you're not trying to get ".n"/"._count"/"._children", get "._sub"
+// replace ".n." with "._arr[n]"
+// eg: cmi.interactions.0 -> cmi.interactions._arr[0]
+function arrayifyPath(path) {
+    return path.replace(/\.(\d)\./g, '._arr[$1].');
+}
+
+// replace ".key" with "._sub.key"
+// eg: cmi.interactions -> cmi._sub.interactions
+function subifyPath(path) {
+    return path.split('.')
+    // add ._sub if you're not trying to get ".n"/"._count"/"._children"
     .map(function (part, i, arr) {
         return (/^(_arr|_count$|_children$)/.test(arr[i + 1] || '') ? part : part + '._sub'
         );
-    }).join('.').split('.').slice(0, -1).concat('_value').join('.');
+    }).join('.');
+}
+
+// replace the last n keys with custom values
+// eg: cmi._sub.interactions._count -> cmi._sub.interactions._arr.length
+function replaceLastKeys(path, keys, newKey) {
+    return path.split('.').slice(0, -keys).concat(newKey).join('.');
+}
+
+// converts a cmi path to a path supported by the underlying data structure
+// eg: cmi.interactions._count -> cmi._sub.interactions._arr[0].length
+function normalizePath(path) {
+    var newPath = subifyPath(arrayifyPath(path.toLowerCase()));
+
+    if (/_count/.test(newPath)) {
+        return replaceLastKeys(newPath, 2, '_arr.length');
+    }
+
+    return replaceLastKeys(newPath, 1, '_value');
 }
 
 // converts a cmi path to a generic version so we can compare against the spec
@@ -657,7 +679,7 @@ var _VALIDATIONS;
 
 // TODO: make validations legit
 var VALIDATIONS = (_VALIDATIONS = {}, babelHelpers.defineProperty(_VALIDATIONS, TYPE.CHARACTERSTRING, function (value, data) {
-    return value === data;
+    return data ? value === data : true;
 }), babelHelpers.defineProperty(_VALIDATIONS, TYPE.LOCALIZED_STRING_TYPE, function () {
     return true;
 }), babelHelpers.defineProperty(_VALIDATIONS, TYPE.LANGUAGE_TYPE, function () {
@@ -741,31 +763,42 @@ var ModelComponent = (function () {
     }
 
     babelHelpers.createClass(ModelComponent, [{
+        key: '_Serialize',
+        value: function _Serialize() {
+            var key = arguments.length <= 0 || arguments[0] === undefined ? '' : arguments[0];
+
+            if (!this._arr.length && !Object.keys(this._sub).length) {
+                if (this._value === '') return [];
+
+                return [{ element: key, value: this._value }];
+            }
+
+            var arr = _.map(this._arr, function (value, idx) {
+                return value._Serialize(key + '.' + idx);
+            });
+            var sub = _.map(this._sub, function (value, obj) {
+                return value._Serialize(key + '.' + obj);
+            });
+
+            return arr.concat(sub);
+        }
+    }, {
         key: 'toString',
         value: function toString() {
-            var _this = this;
-
             var key = arguments.length <= 0 || arguments[0] === undefined ? '' : arguments[0];
 
             if (!this._arr.length && !Object.keys(this._sub).length) return key + ' = "' + this._value + '"';
 
-            var arr = this._arr.map(function (ar, i) {
-                return ar.toString(key + '.' + i);
+            var arr = _.map(this._arr, function (value, idx) {
+                return value.toString(key + '.' + idx);
             });
-            var sub = Object.keys(this._sub).map(function (obj) {
-                return _this._sub[obj].toString(key + '.' + obj);
+            var sub = _.map(this._sub, function (value, obj) {
+                return value.toString(key + '.' + obj);
             });
 
             return arr.concat(sub).concat(arr.length ? key + '._count = ' + arr.length : [])
             // .concat(this.__children.length ? `${key}._children = ${this.__children.join(',')}` : [])
             .join('\n');
-        }
-    }, {
-        key: '_count',
-        get: function get() {
-            return {
-                _value: String(this._arr.length)
-            };
         }
     }]);
     return ModelComponent;
@@ -838,13 +871,28 @@ var Model = (function () {
     }, {
         key: '_GetValue',
         value: function _GetValue(path) {
-            return _.get(this.data, path);
+            return String(_.get(this.data, path));
+        }
+    }, {
+        key: '_ExistPath',
+        value: function _ExistPath(path) {
+            var _this = this;
+
+            path.split('.').slice(1).slice(0, -1).reduce(function (currPath, part) {
+                var nextPath = currPath + '.' + part;
+
+                var nextVal = _.get(_this.data, nextPath);
+
+                if (!nextVal && part !== '_sub') {
+                    _.set(_this.data, nextPath, new ModelComponent());
+                }
+
+                return nextPath;
+            }, path.split('.')[0]);
         }
     }, {
         key: 'SetValue',
         value: function SetValue(element, value) {
-            var _this2 = this;
-
             var genericPath = genericizePath(element);
 
             if (!pathExists(genericPath)) {
@@ -861,17 +909,7 @@ var Model = (function () {
 
             var path = normalizePath(element);
 
-            path.split('.').slice(1).slice(0, -1).reduce(function (currPath, part) {
-                var nextPath = currPath + '.' + part;
-
-                var nextVal = _.get(_this2.data, nextPath);
-
-                if (!nextVal && part !== '_sub') {
-                    _.set(_this2.data, nextPath, new ModelComponent());
-                }
-
-                return nextPath;
-            }, path.split('.')[0]);
+            this._ExistPath(path);
 
             this._SetValue(path, value);
         }
@@ -883,30 +921,43 @@ var Model = (function () {
         value: function _SetValue(path, value) {
             _.set(this.data, path, value);
         }
-
-        // TODO: implement
-
     }, {
         key: 'Serialize',
-        value: function Serialize() {}
-
-        // TODO: implement
-
+        value: function Serialize() {
+            return _.flattenDeep(_.map(this.data, function (value, key) {
+                return value._Serialize(key);
+            }));
+        }
     }, {
         key: 'toString',
 
         // TODO: include children
         value: function toString() {
-            var _this3 = this;
+            var _this2 = this;
 
             return Object.keys(this.data).map(function (key) {
-                return '' + _this3.data[key].toString(key);
+                return '' + _this2.data[key].toString(key);
             }).join('\n').split('\n').sort().join('\n');
         }
     }], [{
         key: 'Deserialize',
-        value: function Deserialize(serialized) {
-            return new Model();
+        value: function Deserialize(serializedData) {
+            var model = new Model();
+
+            if (serializedData) {
+                _.forEach(serializedData, function (_ref2) {
+                    var element = _ref2.element;
+                    var value = _ref2.value;
+
+                    var path = normalizePath(element);
+
+                    model._ExistPath(path);
+
+                    model._SetValue(path, value);
+                });
+            }
+
+            return model;
         }
     }]);
     return Model;
