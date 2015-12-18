@@ -11,12 +11,6 @@ class ModelComponent {
         this._arr = arr;
     }
 
-    get _count() {
-        return {
-            _value: String(this._arr.length)
-        };
-    }
-
     toString(key = '') {
         if (!this._arr.length && !Object.keys(this._sub).length) return `${key} = "${this._value}"`;
 
