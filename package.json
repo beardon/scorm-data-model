@@ -1,6 +1,6 @@
 {
   "name": "scorm-data-model",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SCORM Data Model",
   "main": "dist/index.js",
   "jsnext:main": "src/index.js",

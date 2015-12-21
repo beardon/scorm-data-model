@@ -763,21 +763,21 @@ var ModelComponent = (function () {
     }
 
     babelHelpers.createClass(ModelComponent, [{
-        key: '_Serialize',
-        value: function _Serialize() {
+        key: 'serialize',
+        value: function serialize() {
             var key = arguments.length <= 0 || arguments[0] === undefined ? '' : arguments[0];
 
             if (!this._arr.length && !Object.keys(this._sub).length) {
                 if (this._value === '') return [];
 
-                return [{ element: key, value: this._value }];
+                return babelHelpers.defineProperty({}, key, this._value);
             }
 
             var arr = _.map(this._arr, function (value, idx) {
-                return value._Serialize(key + '.' + idx);
+                return value.serialize(key + '.' + idx);
             });
             var sub = _.map(this._sub, function (value, obj) {
-                return value._Serialize(key + '.' + obj);
+                return value.serialize(key + '.' + obj);
             });
 
             return arr.concat(sub);
@@ -863,20 +863,22 @@ var Model = (function () {
                 return '1.0';
             }
 
-            return this._GetValue(normalizePath(element));
+            return this._GetValue(element);
         }
 
         // slurp the value out of the underlying data structure
 
     }, {
         key: '_GetValue',
-        value: function _GetValue(path) {
-            return String(_.get(this.data, path));
+        value: function _GetValue(element) {
+            return String(_.get(this.data, normalizePath(element)));
         }
     }, {
         key: '_ExistPath',
-        value: function _ExistPath(path) {
+        value: function _ExistPath(element) {
             var _this = this;
+
+            var path = normalizePath(element);
 
             path.split('.').slice(1).slice(0, -1).reduce(function (currPath, part) {
                 var nextPath = currPath + '.' + part;
@@ -907,26 +909,24 @@ var Model = (function () {
                 throw new Error(SCORM_2004.DATA_MODEL_ELEMENT_TYPE_MISMATCH);
             }
 
-            var path = normalizePath(element);
-
-            this._ExistPath(path);
-
-            this._SetValue(path, value);
+            this._SetValue(element, value);
         }
 
         // slurp the value into the underlying data structure
 
     }, {
         key: '_SetValue',
-        value: function _SetValue(path, value) {
-            _.set(this.data, path, value);
+        value: function _SetValue(element, value) {
+            this._ExistPath(element);
+
+            _.set(this.data, normalizePath(element), value);
         }
     }, {
         key: 'Serialize',
         value: function Serialize() {
-            return _.flattenDeep(_.map(this.data, function (value, key) {
-                return value._Serialize(key);
-            }));
+            return JSON.stringify(_.flattenDeep(_.map(this.data, function (value, key) {
+                return value.serialize(key);
+            })));
         }
     }, {
         key: 'toString',
@@ -945,15 +945,15 @@ var Model = (function () {
             var model = new Model();
 
             if (serializedData) {
-                _.forEach(serializedData, function (_ref2) {
-                    var element = _ref2.element;
-                    var value = _ref2.value;
+                var serialized = JSON.parse(serializedData);
 
-                    var path = normalizePath(element);
+                _.forEach(serialized, function (obj) {
+                    var element = Object.keys(obj)[0];
+                    var value = obj[element];
 
-                    model._ExistPath(path);
+                    model._ExistPath(element);
 
-                    model._SetValue(path, value);
+                    model._SetValue(element, value);
                 });
             }
 
