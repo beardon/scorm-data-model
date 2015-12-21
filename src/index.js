@@ -11,15 +11,15 @@ class ModelComponent {
         this._arr = arr;
     }
 
-    _Serialize(key = '') {
+    serialize(key = '') {
         if (!this._arr.length && !Object.keys(this._sub).length) {
             if (this._value === '') return [];
 
             return { [key]: this._value };
         }
 
-        const arr = _.map(this._arr, (value, idx) => value._Serialize(`${key}.${idx}`));
-        const sub = _.map(this._sub, (value, obj) => value._Serialize(`${key}.${obj}`));
+        const arr = _.map(this._arr, (value, idx) => value.serialize(`${key}.${idx}`));
+        const sub = _.map(this._sub, (value, obj) => value.serialize(`${key}.${obj}`));
 
         return arr.concat(sub);
     }
@@ -93,15 +93,17 @@ export default class Model {
             return '1.0';
         }
 
-        return this._GetValue(normalizePath(element));
+        return this._GetValue(element);
     }
 
     // slurp the value out of the underlying data structure
-    _GetValue(path) {
-        return String(_.get(this.data, path));
+    _GetValue(element) {
+        return String(_.get(this.data, normalizePath(element)));
     }
 
-    _ExistPath(path) {
+    _ExistPath(element) {
+        const path = normalizePath(element);
+
         path.split('.').slice(1).slice(0, -1).reduce((currPath, part) => {
             const nextPath = `${currPath}.${part}`;
 
@@ -131,20 +133,18 @@ export default class Model {
             throw new Error(ERROR.DATA_MODEL_ELEMENT_TYPE_MISMATCH);
         }
 
-        const path = normalizePath(element);
-
-        this._ExistPath(path);
-
-        this._SetValue(path, value);
+        this._SetValue(element, value);
     }
 
     // slurp the value into the underlying data structure
-    _SetValue(path, value) {
-        _.set(this.data, path, value);
+    _SetValue(element, value) {
+        this._ExistPath(element);
+
+        _.set(this.data, normalizePath(element), value);
     }
 
     Serialize() {
-        return JSON.stringify(_.flattenDeep(_.map(this.data, (value, key) => value._Serialize(key))));
+        return JSON.stringify(_.flattenDeep(_.map(this.data, (value, key) => value.serialize(key))));
     }
 
     static Deserialize(serializedData) {
@@ -153,12 +153,13 @@ export default class Model {
         if (serializedData) {
             const serialized = JSON.parse(serializedData);
 
-            _.forEach(serialized, (value) => {
-                const path = normalizePath(Object.keys(value)[0]);
+            _.forEach(serialized, (obj) => {
+                const element = Object.keys(obj)[0];
+                const value = obj[element];
 
-                model._ExistPath(path);
+                model._ExistPath(element);
 
-                model._SetValue(path, value[Object.keys(value)[0]]);
+                model._SetValue(element, value);
             });
         }
 
